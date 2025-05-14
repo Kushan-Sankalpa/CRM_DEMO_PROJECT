@@ -28,4 +28,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
+Route::resource('customers', CustomerController::class)->middleware(['auth']);
+Route::post('customers/{customer}/status', [CustomerController::class, 'updateStatus'])->name('customers.updateStatus')->middleware(['auth']);
+
 require __DIR__.'/auth.php';
