@@ -31,4 +31,7 @@ Route::middleware('auth')->group(function () {
 Route::resource('customers', CustomerController::class)->middleware(['auth']);
 Route::post('customers/{customer}/status', [CustomerController::class, 'updateStatus'])->name('customers.updateStatus')->middleware(['auth']);
 
+Route::resource('proposals', ProposalController::class)->middleware(['auth']);
+Route::post('proposals/{proposal}/status', [ProposalController::class, 'updateStatus'])->name('proposals.updateStatus')->middleware(['auth']);
+
 require __DIR__.'/auth.php';
