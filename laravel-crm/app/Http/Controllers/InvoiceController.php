@@ -105,15 +105,31 @@ class InvoiceController extends Controller
         return redirect()->to($session->url);
     }
 
-    public function paymentSuccess(Invoice $invoice)
-    {
-        $invoice->update(['status' => 'paid']);
-        return redirect()->route('invoices.index')->with('success', 'Payment successful.');
-    }
+    public function paymentSuccess(Invoice $invoice){
+    $invoice->update(['status' => 'paid']);
 
-    public function paymentCancel(Invoice $invoice)
-    {
+    Transaction::create([
+        'customer_id' => $invoice->customer_id,
+        'invoice_id' => $invoice->id,
+        'stripe_payment_id' => $invoice->stripe_payment_id,
+        'amount' => $invoice->amount,
+        'status' => 'success',
+    ]);
+
+    return redirect()->route('invoices.index')->with('success', 'Payment successful.');
+    }   
+
+    public function paymentCancel(Invoice $invoice){
         $invoice->update(['status' => 'failed']);
+
+        Transaction::create([
+            'customer_id' => $invoice->customer_id,
+            'invoice_id' => $invoice->id,
+            'stripe_payment_id' => $invoice->stripe_payment_id,
+            'amount' => $invoice->amount,
+            'status' => 'failed',
+        ]);
+
         return redirect()->route('invoices.index')->with('error', 'Payment cancelled.');
     }
 }
