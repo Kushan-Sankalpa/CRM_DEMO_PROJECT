@@ -41,4 +41,6 @@ Route::get('invoices/{invoice}/pay', [InvoiceController::class, 'pay'])->name('i
 Route::get('invoices/{invoice}/payment/success', [InvoiceController::class, 'paymentSuccess'])->name('invoices.payment.success');
 Route::get('invoices/{invoice}/payment/cancel', [InvoiceController::class, 'paymentCancel'])->name('invoices.payment.cancel');
 
+Route::resource('transactions', TransactionController::class)->only(['index'])->middleware(['auth']);
+
 require __DIR__.'/auth.php';
