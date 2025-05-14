@@ -34,4 +34,11 @@ Route::post('customers/{customer}/status', [CustomerController::class, 'updateSt
 Route::resource('proposals', ProposalController::class)->middleware(['auth']);
 Route::post('proposals/{proposal}/status', [ProposalController::class, 'updateStatus'])->name('proposals.updateStatus')->middleware(['auth']);
 
+Route::resource('invoices', InvoiceController::class)->middleware(['auth']);
+Route::post('invoices/{invoice}/status', [InvoiceController::class, 'updateStatus'])->name('invoices.updateStatus')->middleware(['auth']);
+Route::get('invoices/{invoice}/send', [InvoiceController::class, 'send'])->name('invoices.send')->middleware(['auth']);
+Route::get('invoices/{invoice}/pay', [InvoiceController::class, 'pay'])->name('invoices.pay');
+Route::get('invoices/{invoice}/payment/success', [InvoiceController::class, 'paymentSuccess'])->name('invoices.payment.success');
+Route::get('invoices/{invoice}/payment/cancel', [InvoiceController::class, 'paymentCancel'])->name('invoices.payment.cancel');
+
 require __DIR__.'/auth.php';
