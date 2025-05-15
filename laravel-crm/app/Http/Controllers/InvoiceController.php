@@ -1,135 +1,146 @@
 <?php
-namespace App\Http\Controllers;
+  namespace App\Http\Controllers;
 
-use App\Models\Invoice;
-use App\Models\Customer;
-use App\Mail\InvoiceMail;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
-use Stripe\Checkout\Session;
-use Stripe\Stripe;
+  use App\Models\Invoice;
+  use App\Models\Customer;
+  use App\Models\Transaction;
+  use App\Mail\InvoiceMail;
+  use Illuminate\Http\Request;
+  use Illuminate\Support\Facades\Mail;
+  use Stripe\Checkout\Session;
+  use Stripe\Stripe;
 
-class InvoiceController extends Controller
-{
-    public function index()
-    {
-        $invoices = Invoice::with('customer')->get();
-        return view('invoices.index', compact('invoices'));
-    }
+  class InvoiceController extends Controller
+  {
+      public function index()
+      {
+          $invoices = Invoice::with('customer')->get();
+          return view('invoices.index', compact('invoices'));
+      }
 
-    public function create()
-    {
-        $customers = Customer::where('status', 'active')->get();
-        return view('invoices.create', compact('customers'));
-    }
+      public function create()
+      {
+          $customers = Customer::where('status', 'active')->get();
+          return view('invoices.create', compact('customers'));
+      }
 
-    public function store(Request $request)
-    {
-        $request->validate([
-            'customer_id' => 'required|exists:customers,id',
-            'amount' => 'required|numeric|min:0',
-        ]);
+      public function store(Request $request)
+      {
+          $request->validate([
+              'customer_id' => 'required|exists:customers,id',
+              'amount' => 'required|numeric|min:0',
+          ]);
 
-        $invoice = Invoice::create([
-            'customer_id' => $request->customer_id,
-            'invoice_number' => 'INV-' . str_pad(Invoice::count() + 1, 6, '0', STR_PAD_LEFT),
-            'amount' => $request->amount,
-        ]);
+          
+          $lastInvoice = Invoice::max('id') ?? 0;
+          $nextNumber = $lastInvoice + 1;
+          $invoiceNumber = 'INV-' . str_pad($nextNumber, 6, '0', STR_PAD_LEFT);
 
-        return redirect()->route('invoices.index')->with('success', 'Invoice created successfully.');
-    }
+          $invoice = Invoice::create([
+              'customer_id' => $request->customer_id,
+              'invoice_number' => $invoiceNumber,
+              'amount' => $request->amount,
+          ]);
 
-    public function edit(Invoice $invoice)
-    {
-        $customers = Customer::where('status', 'active')->get();
-        return view('invoices.edit', compact('invoice', 'customers'));
-    }
+          // Optionally send the invoice email automatically
+          Mail::to($invoice->customer->email)->send(new InvoiceMail($invoice));
 
-    public function update(Request $request, Invoice $invoice)
-    {
-        $request->validate([
-            'customer_id' => 'required|exists:customers,id',
-            'amount' => 'required|numeric|min:0',
-        ]);
+          return redirect()->route('invoices.index')->with('success', 'Invoice created and sent successfully.');
+      }
 
-        $invoice->update($request->all());
-        return redirect()->route('invoices.index')->with('success', 'Invoice updated successfully.');
-    }
+      public function edit(Invoice $invoice)
+      {
+          $customers = Customer::where('status', 'active')->get();
+          return view('invoices.edit', compact('invoice', 'customers'));
+      }
 
-    public function destroy(Invoice $invoice)
-    {
-        $invoice->delete();
-        return redirect()->route('invoices.index')->with('success', 'Invoice deleted successfully.');
-    }
+      public function update(Request $request, Invoice $invoice)
+      {
+          $request->validate([
+              'customer_id' => 'required|exists:customers,id',
+              'amount' => 'required|numeric|min:0',
+          ]);
 
-    public function updateStatus(Invoice $invoice, Request $request)
-    {
-        $request->validate([
-            'status' => 'required|in:pending,paid,failed',
-        ]);
+          $invoice->update($request->all());
+          return redirect()->route('invoices.index')->with('success', 'Invoice updated successfully.');
+      }
 
-        $invoice->status = $request->status;
-        $invoice->save();
-        return redirect()->route('invoices.index')->with('success', 'Invoice status updated.');
-    }
+      public function destroy(Invoice $invoice)
+      {
+          $invoice->delete();
+          return redirect()->route('invoices.index')->with('success', 'Invoice deleted successfully.');
+      }
 
-    public function send(Invoice $invoice)
-    {
-        Mail::to($invoice->customer->email)->send(new InvoiceMail($invoice));
-        return redirect()->route('invoices.index')->with('success', 'Invoice sent successfully.');
-    }
+      public function updateStatus(Invoice $invoice, Request $request)
+      {
+          $request->validate([
+              'status' => 'required|in:pending,paid,failed',
+          ]);
 
-    public function pay(Invoice $invoice)
-    {
-        Stripe::setApiKey(env('STRIPE_SECRET'));
+          $invoice->status = $request->status;
+          $invoice->save();
+          return redirect()->route('invoices.index')->with('success', 'Invoice status updated.');
+      }
 
-        $session = Session::create([
-            'payment_method_types' => ['card'],
-            'line_items' => [[
-                'price_data' => [
-                    'currency' => 'usd',
-                    'product_data' => [
-                        'name' => 'Invoice #' . $invoice->invoice_number,
-                    ],
-                    'unit_amount' => $invoice->amount * 100,
-                ],
-                'quantity' => 1,
-            ]],
-            'mode' => 'payment',
-            'success_url' => route('invoices.payment.success', $invoice),
-            'cancel_url' => route('invoices.payment.cancel', $invoice),
-        ]);
+      public function send(Invoice $invoice)
+      {
+          Mail::to($invoice->customer->email)->send(new InvoiceMail($invoice));
+          return redirect()->route('invoices.index')->with('success', 'Invoice sent successfully.');
+      }
 
-        $invoice->update(['stripe_payment_id' => $session->id]);
+      public function pay(Invoice $invoice)
+      {
+          Stripe::setApiKey(env('STRIPE_SECRET'));
 
-        return redirect()->to($session->url);
-    }
+          $session = Session::create([
+              'payment_method_types' => ['card'],
+              'line_items' => [[
+                  'price_data' => [
+                      'currency' => 'usd',
+                      'product_data' => [
+                          'name' => 'Invoice #' . $invoice->invoice_number,
+                      ],
+                      'unit_amount' => $invoice->amount * 100,
+                  ],
+                  'quantity' => 1,
+              ]],
+              'mode' => 'payment',
+              'success_url' => route('invoices.payment.success', $invoice),
+              'cancel_url' => route('invoices.payment.cancel', $invoice),
+          ]);
 
-    public function paymentSuccess(Invoice $invoice){
-    $invoice->update(['status' => 'paid']);
+          $invoice->update(['stripe_payment_id' => $session->id]);
 
-    Transaction::create([
-        'customer_id' => $invoice->customer_id,
-        'invoice_id' => $invoice->id,
-        'stripe_payment_id' => $invoice->stripe_payment_id,
-        'amount' => $invoice->amount,
-        'status' => 'success',
-    ]);
+          return redirect()->to($session->url);
+      }
 
-    return redirect()->route('invoices.index')->with('success', 'Payment successful.');
-    }   
+      public function paymentSuccess(Invoice $invoice)
+      {
+          $invoice->update(['status' => 'paid']);
 
-    public function paymentCancel(Invoice $invoice){
-        $invoice->update(['status' => 'failed']);
+          Transaction::create([
+              'customer_id' => $invoice->customer_id,
+              'invoice_id' => $invoice->id,
+              'stripe_payment_id' => $invoice->stripe_payment_id,
+              'amount' => $invoice->amount,
+              'status' => 'success',
+          ]);
 
-        Transaction::create([
-            'customer_id' => $invoice->customer_id,
-            'invoice_id' => $invoice->id,
-            'stripe_payment_id' => $invoice->stripe_payment_id,
-            'amount' => $invoice->amount,
-            'status' => 'failed',
-        ]);
+          return redirect()->route('invoices.index')->with('success', 'Payment successful.');
+      }
 
-        return redirect()->route('invoices.index')->with('error', 'Payment cancelled.');
-    }
-}
+      public function paymentCancel(Invoice $invoice)
+      {
+          $invoice->update(['status' => 'failed']);
+
+          Transaction::create([
+              'customer_id' => $invoice->customer_id,
+              'invoice_id' => $invoice->id,
+              'stripe_payment_id' => $invoice->stripe_payment_id,
+              'amount' => $invoice->amount,
+              'status' => 'failed',
+          ]);
+
+          return redirect()->route('invoices.index')->with('error', 'Payment cancelled.');
+      }
+  }
