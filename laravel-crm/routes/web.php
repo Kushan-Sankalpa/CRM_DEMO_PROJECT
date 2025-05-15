@@ -10,8 +10,13 @@ use App\Http\Controllers\TransactionController;
 
 
 Route::get('/', function () {
-    return view('welcome');
+   return redirect('/login');
 });
+
+Route::post('/logout', function () {
+    Auth::logout();
+    return redirect('/login');
+})->name('logout');
 
 Route::get('/dashboard', function () {
     return view('dashboard');
